@@ -1,10 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
+
+interface BounceStep {
+  bounce: number;
+  fall: number;
+  rise: number;
+  peak: number;
+  cumulative: number;
+}
 
 function calculateBounceDistance(initialHeightMeters: number) {
   const MIN_HEIGHT_METERS = 0.0002; // 1/5 mm = 0.2 mm = 0.0002 m
   const BOUNCE_FACTOR = 2 / 3;
 
-  const steps: { bounce: number; fall: number; rise: number; peak: number; cumulative: number }[] = [];
+  const steps: BounceStep[] = [];
   let totalDistance = 0;
   let currentHeight = initialHeightMeters;
   let bounceNum = 0;
@@ -26,12 +34,12 @@ function calculateBounceDistance(initialHeightMeters: number) {
   return { steps, totalDistance, totalBounces: bounceNum - 1 };
 }
 
-function App() {
+export default function App() {
   const [heightInput, setHeightInput] = useState('10');
   const [unit, setUnit] = useState('meters');
   const [showAll, setShowAll] = useState(false);
 
-  const result = useMemo(() => {
+  const result = (() => {
     const val = parseFloat(heightInput);
     if (isNaN(val) || val <= 0) return null;
     let m: number;
@@ -43,7 +51,7 @@ function App() {
       default: m = val;
     }
     return calculateBounceDistance(m);
-  }, [heightInput, unit]);
+  })();
 
   const fmt = (m: number) => {
     if (m >= 1000) return (m / 1000).toFixed(4) + ' km';
@@ -282,5 +290,3 @@ if __name__ == "__main__":
     </div>
   );
 }
-
-export default App;
