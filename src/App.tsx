@@ -1,459 +1,284 @@
 import { useState, useMemo } from 'react';
 
-interface BounceStep {
-  bounceNumber: number;
-  fallDistance: number;
-  riseDistance: number;
-  peakHeight: number;
-  cumulativeDistance: number;
-}
-
-interface CalculationResult {
-  steps: BounceStep[];
-  totalDistance: number;
-  totalBounces: number;
-  initialHeight: number;
-  minHeightMeters: number;
-}
-
-function calculateBounceDistance(initialHeightMeters: number): CalculationResult {
+function calculateBounceDistance(initialHeightMeters: number) {
   const MIN_HEIGHT_METERS = 0.0002; // 1/5 mm = 0.2 mm = 0.0002 m
-  const BOUNCE_FACTOR = 2 / 3; // loses 1/3 of height each bounce
+  const BOUNCE_FACTOR = 2 / 3;
 
-  const steps: BounceStep[] = [];
+  const steps: { bounce: number; fall: number; rise: number; peak: number; cumulative: number }[] = [];
   let totalDistance = 0;
   let currentHeight = initialHeightMeters;
-  let bounceNumber = 0;
+  let bounceNum = 0;
 
   // First fall
   totalDistance += currentHeight;
-  steps.push({
-    bounceNumber: 0,
-    fallDistance: currentHeight,
-    riseDistance: 0,
-    peakHeight: currentHeight,
-    cumulativeDistance: totalDistance,
-  });
+  steps.push({ bounce: 0, fall: currentHeight, rise: 0, peak: currentHeight, cumulative: totalDistance });
 
-  // Subsequent bounces
   while (true) {
-    bounceNumber++;
+    bounceNum++;
     const nextHeight = currentHeight * BOUNCE_FACTOR;
+    if (nextHeight < MIN_HEIGHT_METERS) break;
 
-    if (nextHeight < MIN_HEIGHT_METERS) {
-      break;
-    }
-
-    // Ball rises and falls the same distance
-    const riseAndFall = nextHeight * 2;
-    totalDistance += riseAndFall;
-
-    steps.push({
-      bounceNumber,
-      fallDistance: nextHeight,
-      riseDistance: nextHeight,
-      peakHeight: nextHeight,
-      cumulativeDistance: totalDistance,
-    });
-
+    totalDistance += nextHeight * 2;
+    steps.push({ bounce: bounceNum, fall: nextHeight, rise: nextHeight, peak: nextHeight, cumulative: totalDistance });
     currentHeight = nextHeight;
   }
 
-  return {
-    steps,
-    totalDistance,
-    totalBounces: bounceNumber - 1,
-    initialHeight: initialHeightMeters,
-    minHeightMeters: MIN_HEIGHT_METERS,
-  };
-}
-
-function formatDistance(meters: number): string {
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(4)} km`;
-  } else if (meters >= 1) {
-    return `${meters.toFixed(6)} m`;
-  } else if (meters >= 0.001) {
-    return `${(meters * 100).toFixed(4)} cm`;
-  } else {
-    return `${(meters * 1000).toFixed(4)} mm`;
-  }
+  return { steps, totalDistance, totalBounces: bounceNum - 1 };
 }
 
 function App() {
-  const [heightInput, setHeightInput] = useState<string>('10');
-  const [unit, setUnit] = useState<string>('meters');
-  const [showAllSteps, setShowAllSteps] = useState<boolean>(false);
+  const [heightInput, setHeightInput] = useState('10');
+  const [unit, setUnit] = useState('meters');
+  const [showAll, setShowAll] = useState(false);
 
   const result = useMemo(() => {
-    const value = parseFloat(heightInput);
-    if (isNaN(value) || value <= 0) return null;
-
-    let heightInMeters: number;
+    const val = parseFloat(heightInput);
+    if (isNaN(val) || val <= 0) return null;
+    let m: number;
     switch (unit) {
-      case 'cm':
-        heightInMeters = value / 100;
-        break;
-      case 'mm':
-        heightInMeters = value / 1000;
-        break;
-      case 'feet':
-        heightInMeters = value * 0.3048;
-        break;
-      case 'inches':
-        heightInMeters = value * 0.0254;
-        break;
-      default:
-        heightInMeters = value;
+      case 'cm': m = val / 100; break;
+      case 'mm': m = val / 1000; break;
+      case 'feet': m = val * 0.3048; break;
+      case 'inches': m = val * 0.0254; break;
+      default: m = val;
     }
-
-    return calculateBounceDistance(heightInMeters);
+    return calculateBounceDistance(m);
   }, [heightInput, unit]);
 
-  const displayedSteps = result
-    ? showAllSteps
-      ? result.steps
-      : result.steps.slice(0, 20)
-    : [];
+  const fmt = (m: number) => {
+    if (m >= 1000) return (m / 1000).toFixed(4) + ' km';
+    if (m >= 1) return m.toFixed(6) + ' m';
+    if (m >= 0.001) return (m * 100).toFixed(4) + ' cm';
+    return (m * 1000).toFixed(4) + ' mm';
+  };
+
+  const visibleSteps = result ? (showAll ? result.steps : result.steps.slice(0, 20)) : [];
+
+  const pythonCode = result
+    ? `def calculate_bounce_distance(initial_height_meters):
+    """
+    Calculate total distance of a bouncing ball.
+    Loses 1/3 height each bounce. Stops when bounce < 1/5 mm.
+    """
+    MIN_HEIGHT = 0.0002  # 1/5 mm in meters
+    BOUNCE_FACTOR = 2 / 3  # retains 2/3 each bounce
+
+    total_distance = 0
+    current_height = initial_height_meters
+    bounce_count = 0
+
+    # First fall
+    total_distance += current_height
+    print(f"Drop: {current_height:.6f} m | Total: {total_distance:.6f} m")
+
+    # Bounces
+    while True:
+        next_height = current_height * BOUNCE_FACTOR
+        if next_height < MIN_HEIGHT:
+            print(f"Bounce #{bounce_count+1}: {next_height:.6f} m < threshold -> STOP")
+            break
+        bounce_count += 1
+        total_distance += next_height * 2  # rise + fall
+        print(f"Bounce #{bounce_count}: peak={next_height:.6f} m | Total: {total_distance:.6f} m")
+        current_height = next_height
+
+    print(f"\\nTotal distance: {total_distance:.6f} meters")
+    print(f"Total bounces: {bounce_count}")
+    return total_distance, bounce_count
+
+if __name__ == "__main__":
+    calculate_bounce_distance(${result.steps[0].peak.toFixed(6)})`
+    : '';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-      {/* Header */}
-      <header className="py-8 px-4 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-300 via-orange-400 to-red-400 bg-clip-text text-transparent">
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a, #581c87, #0f172a)', color: 'white', fontFamily: 'system-ui, sans-serif' }}>
+      <header style={{ padding: '2rem 1rem', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', background: 'linear-gradient(to right, #fde047, #f97316, #ef4444)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
           🏀 Bouncing Ball Distance Calculator
         </h1>
-        <p className="mt-3 text-gray-300 text-lg max-w-2xl mx-auto">
-          Calculate the total distance a ball travels when dropped from a height,
-          bouncing and losing <span className="text-yellow-300 font-semibold">1/3</span> of its height each time,
-          until the bounce is less than <span className="text-yellow-300 font-semibold">1/5 mm</span>.
+        <p style={{ color: '#d1d5db', marginTop: '0.75rem', fontSize: '1.1rem' }}>
+          Ball loses <b style={{ color: '#fde047' }}>1/3</b> height each bounce, stops below <b style={{ color: '#fde047' }}>1/5 mm</b>
         </p>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 pb-16">
-        {/* Input Section */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 mb-8 border border-white/20">
-          <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-            <span className="text-3xl">⚙️</span> Parameters
-          </h2>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Initial Drop Height
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={heightInput}
-                  onChange={(e) => setHeightInput(e.target.value)}
-                  min="0.001"
-                  step="any"
-                  className="flex-1 bg-white/10 border border-white/30 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  placeholder="Enter height..."
-                />
-                <select
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value)}
-                  className="bg-white/10 border border-white/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                >
-                  <option value="meters" className="bg-slate-800">meters</option>
-                  <option value="cm" className="bg-slate-800">cm</option>
-                  <option value="mm" className="bg-slate-800">mm</option>
-                  <option value="feet" className="bg-slate-800">feet</option>
-                  <option value="inches" className="bg-slate-800">inches</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex flex-col justify-end">
-              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                <p className="text-sm text-gray-400">Bounce Factor</p>
-                <p className="text-xl font-bold text-yellow-300">Retains 2/3 of height each bounce</p>
-                <p className="text-sm text-gray-400 mt-1">Stop threshold: &lt; 0.2 mm (1/5 mm)</p>
-              </div>
-            </div>
+      <main style={{ maxWidth: '72rem', margin: '0 auto', padding: '0 1rem 4rem' }}>
+        {/* Input */}
+        <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '1rem', padding: '1.5rem', marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem' }}>⚙️ Parameters</h2>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <input
+              type="number"
+              value={heightInput}
+              onChange={e => setHeightInput(e.target.value)}
+              min="0.001"
+              step="any"
+              style={{ flex: 1, minWidth: '150px', padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '0.5rem', color: 'white', fontSize: '1rem' }}
+              placeholder="Enter height..."
+            />
+            <select
+              value={unit}
+              onChange={e => setUnit(e.target.value)}
+              style={{ padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '0.5rem', color: 'white', fontSize: '1rem' }}
+            >
+              <option value="meters" style={{ background: '#1e293b' }}>meters</option>
+              <option value="cm" style={{ background: '#1e293b' }}>cm</option>
+              <option value="mm" style={{ background: '#1e293b' }}>mm</option>
+              <option value="feet" style={{ background: '#1e293b' }}>feet</option>
+              <option value="inches" style={{ background: '#1e293b' }}>inches</option>
+            </select>
           </div>
         </div>
 
-        {/* Results Section */}
         {result && (
           <>
             {/* Summary Cards */}
-            <div className="grid md:grid-cols-3 gap-4 mb-8">
-              <div className="bg-gradient-to-br from-green-500/20 to-emerald-600/20 backdrop-blur-md rounded-2xl p-6 border border-green-400/30">
-                <div className="text-sm text-green-300 font-medium">Total Distance</div>
-                <div className="text-3xl font-bold text-white mt-2">{formatDistance(result.totalDistance)}</div>
-                <div className="text-sm text-gray-400 mt-1">{result.totalDistance.toFixed(6)} meters</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+              <div style={{ background: 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(5,150,105,0.2))', borderRadius: '1rem', padding: '1.5rem', border: '1px solid rgba(74,222,128,0.3)' }}>
+                <div style={{ fontSize: '0.875rem', color: '#86efac' }}>Total Distance</div>
+                <div style={{ fontSize: '1.875rem', fontWeight: 'bold', marginTop: '0.5rem' }}>{fmt(result.totalDistance)}</div>
+                <div style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.25rem' }}>{result.totalDistance.toFixed(6)} meters</div>
               </div>
-              <div className="bg-gradient-to-br from-blue-500/20 to-cyan-600/20 backdrop-blur-md rounded-2xl p-6 border border-blue-400/30">
-                <div className="text-sm text-blue-300 font-medium">Number of Bounces</div>
-                <div className="text-3xl font-bold text-white mt-2">{result.totalBounces}</div>
-                <div className="text-sm text-gray-400 mt-1">before stopping</div>
+              <div style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(6,182,212,0.2))', borderRadius: '1rem', padding: '1.5rem', border: '1px solid rgba(96,165,250,0.3)' }}>
+                <div style={{ fontSize: '0.875rem', color: '#93c5fd' }}>Number of Bounces</div>
+                <div style={{ fontSize: '1.875rem', fontWeight: 'bold', marginTop: '0.5rem' }}>{result.totalBounces}</div>
+                <div style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.25rem' }}>before stopping</div>
               </div>
-              <div className="bg-gradient-to-br from-purple-500/20 to-pink-600/20 backdrop-blur-md rounded-2xl p-6 border border-purple-400/30">
-                <div className="text-sm text-purple-300 font-medium">Initial Height</div>
-                <div className="text-3xl font-bold text-white mt-2">{formatDistance(result.initialHeight)}</div>
-                <div className="text-sm text-gray-400 mt-1">drop height</div>
+              <div style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.2), rgba(219,39,119,0.2))', borderRadius: '1rem', padding: '1.5rem', border: '1px solid rgba(192,132,252,0.3)' }}>
+                <div style={{ fontSize: '0.875rem', color: '#d8b4fe' }}>Initial Height</div>
+                <div style={{ fontSize: '1.875rem', fontWeight: 'bold', marginTop: '0.5rem' }}>{fmt(result.steps[0].peak)}</div>
+                <div style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.25rem' }}>drop height</div>
               </div>
             </div>
 
-            {/* Visual Animation */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 mb-8 border border-white/20">
-              <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                <span className="text-3xl">📊</span> Bounce Visualization
-              </h2>
-              <BounceVisualization steps={result.steps} />
+            {/* Visualization */}
+            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '1rem', padding: '1.5rem', marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem' }}>📊 Bounce Visualization</h2>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '200px', borderBottom: '2px solid rgba(74,222,128,0.5)', padding: '0 0.5rem 0.25rem', overflowX: 'auto' }}>
+                {result.steps.slice(0, 40).map((step, i) => {
+                  const maxH = result.steps[0].peak;
+                  const pct = Math.max((step.peak / maxH) * 100, 2);
+                  const opacity = 1 - (i / 40) * 0.7;
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        flex: 1,
+                        minWidth: '8px',
+                        maxWidth: '30px',
+                        height: pct + '%',
+                        background: i === 0 ? `rgba(239,68,68,${opacity})` : `rgba(250,204,21,${opacity})`,
+                        borderRadius: '2px 2px 0 0',
+                      }}
+                      title={'Bounce #' + step.bounce + ': ' + fmt(step.peak)}
+                    />
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontSize: '0.75rem', color: '#9ca3af' }}>
+                <span>Drop</span>
+                <span>→ Bounce progression →</span>
+                <span>Stop</span>
+              </div>
             </div>
 
             {/* Python Code */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 mb-8 border border-white/20">
-              <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                <span className="text-3xl">🐍</span> Python Code
-              </h2>
-              <PythonCode heightMeters={result.initialHeight} />
+            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '1rem', padding: '1.5rem', marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem' }}>🐍 Python Code</h2>
+              <button
+                onClick={() => navigator.clipboard.writeText(pythonCode)}
+                style={{ marginBottom: '0.5rem', padding: '0.375rem 0.75rem', background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(74,222,128,0.4)', borderRadius: '0.5rem', color: '#86efac', fontSize: '0.75rem', cursor: 'pointer' }}
+              >
+                📋 Copy Code
+              </button>
+              <pre style={{ background: 'rgba(0,0,0,0.4)', borderRadius: '0.5rem', padding: '1rem', overflowX: 'auto', fontSize: '0.875rem', fontFamily: 'monospace', color: '#e5e7eb', lineHeight: 1.6 }}>
+                <code>{pythonCode}</code>
+              </pre>
             </div>
 
-            {/* Step-by-step Table */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 border border-white/20">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-semibold flex items-center gap-2">
-                  <span className="text-3xl">📋</span> Step-by-Step Breakdown
-                </h2>
+            {/* Table */}
+            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '1rem', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>📋 Step-by-Step Breakdown</h2>
                 {result.steps.length > 20 && (
                   <button
-                    onClick={() => setShowAllSteps(!showAllSteps)}
-                    className="px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-400/40 rounded-lg text-yellow-300 text-sm font-medium transition-colors"
+                    onClick={() => setShowAll(!showAll)}
+                    style={{ padding: '0.5rem 1rem', background: 'rgba(234,179,8,0.2)', border: '1px solid rgba(250,204,21,0.4)', borderRadius: '0.5rem', color: '#fde047', fontSize: '0.875rem', cursor: 'pointer' }}
                   >
-                    {showAllSteps ? 'Show Less' : `Show All (${result.steps.length})`}
+                    {showAll ? 'Show Less' : 'Show All (' + result.steps.length + ')'}
                   </button>
                 )}
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', fontSize: '0.875rem', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr className="border-b border-white/20">
-                      <th className="text-left py-3 px-3 text-gray-300 font-medium">Event</th>
-                      <th className="text-right py-3 px-3 text-gray-300 font-medium">Fall (m)</th>
-                      <th className="text-right py-3 px-3 text-gray-300 font-medium">Rise (m)</th>
-                      <th className="text-right py-3 px-3 text-gray-300 font-medium">Peak Height (m)</th>
-                      <th className="text-right py-3 px-3 text-gray-300 font-medium">Cumulative (m)</th>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                      <th style={{ textAlign: 'left', padding: '0.75rem', color: '#d1d5db' }}>Event</th>
+                      <th style={{ textAlign: 'right', padding: '0.75rem', color: '#d1d5db' }}>Fall (m)</th>
+                      <th style={{ textAlign: 'right', padding: '0.75rem', color: '#d1d5db' }}>Rise (m)</th>
+                      <th style={{ textAlign: 'right', padding: '0.75rem', color: '#d1d5db' }}>Peak (m)</th>
+                      <th style={{ textAlign: 'right', padding: '0.75rem', color: '#d1d5db' }}>Cumulative (m)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {displayedSteps.map((step, idx) => (
-                      <tr
-                        key={idx}
-                        className={`border-b border-white/5 ${idx % 2 === 0 ? 'bg-white/5' : ''} hover:bg-white/10 transition-colors`}
-                      >
-                        <td className="py-2.5 px-3">
-                          {step.bounceNumber === 0 ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-red-400"></span>
-                              Initial Drop
-                            </span>
+                    {visibleSteps.map((s, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: i % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent' }}>
+                        <td style={{ padding: '0.625rem 0.75rem' }}>
+                          {s.bounce === 0 ? (
+                            <span>🔴 Initial Drop</span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
-                              Bounce #{step.bounceNumber}
-                            </span>
+                            <span>🟡 Bounce #{s.bounce}</span>
                           )}
                         </td>
-                        <td className="text-right py-2.5 px-3 font-mono">{step.fallDistance.toFixed(6)}</td>
-                        <td className="text-right py-2.5 px-3 font-mono">
-                          {step.riseDistance > 0 ? step.riseDistance.toFixed(6) : '—'}
-                        </td>
-                        <td className="text-right py-2.5 px-3 font-mono">{step.peakHeight.toFixed(6)}</td>
-                        <td className="text-right py-2.5 px-3 font-mono font-bold text-yellow-300">
-                          {step.cumulativeDistance.toFixed(6)}
-                        </td>
+                        <td style={{ textAlign: 'right', padding: '0.625rem 0.75rem', fontFamily: 'monospace' }}>{s.fall.toFixed(6)}</td>
+                        <td style={{ textAlign: 'right', padding: '0.625rem 0.75rem', fontFamily: 'monospace' }}>{s.rise > 0 ? s.rise.toFixed(6) : '—'}</td>
+                        <td style={{ textAlign: 'right', padding: '0.625rem 0.75rem', fontFamily: 'monospace' }}>{s.peak.toFixed(6)}</td>
+                        <td style={{ textAlign: 'right', padding: '0.625rem 0.75rem', fontFamily: 'monospace', fontWeight: 'bold', color: '#fde047' }}>{s.cumulative.toFixed(6)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-yellow-400/50 bg-yellow-500/10">
-                      <td className="py-3 px-3 font-bold text-yellow-300">TOTAL</td>
-                      <td className="text-right py-3 px-3 font-mono font-bold">
-                        {result.steps.reduce((sum, s) => sum + s.fallDistance, 0).toFixed(6)}
+                    <tr style={{ borderTop: '2px solid rgba(250,204,21,0.5)', background: 'rgba(234,179,8,0.1)' }}>
+                      <td style={{ padding: '0.75rem', fontWeight: 'bold', color: '#fde047' }}>TOTAL</td>
+                      <td style={{ textAlign: 'right', padding: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                        {result.steps.reduce((a, s) => a + s.fall, 0).toFixed(6)}
                       </td>
-                      <td className="text-right py-3 px-3 font-mono font-bold">
-                        {result.steps.reduce((sum, s) => sum + s.riseDistance, 0).toFixed(6)}
+                      <td style={{ textAlign: 'right', padding: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                        {result.steps.reduce((a, s) => a + s.rise, 0).toFixed(6)}
                       </td>
                       <td></td>
-                      <td className="text-right py-3 px-3 font-mono font-bold text-yellow-300 text-lg">
+                      <td style={{ textAlign: 'right', padding: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold', color: '#fde047', fontSize: '1.125rem' }}>
                         {result.totalDistance.toFixed(6)}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
-              {!showAllSteps && result.steps.length > 20 && (
-                <p className="text-center text-gray-400 text-sm mt-4">
-                  Showing first 20 of {result.steps.length} bounces. Click "Show All" to see everything.
+              {!showAll && result.steps.length > 20 && (
+                <p style={{ textAlign: 'center', color: '#9ca3af', fontSize: '0.875rem', marginTop: '1rem' }}>
+                  Showing first 20 of {result.steps.length} bounces
                 </p>
               )}
             </div>
           </>
         )}
 
-        {/* Formula Section */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 mt-8 border border-white/20">
-          <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-            <span className="text-3xl">📐</span> The Math
-          </h2>
-          <div className="space-y-4 text-gray-300">
-            <p>
-              When a ball is dropped from height <span className="text-yellow-300 font-mono font-bold">H</span> and
-              each bounce retains <span className="text-yellow-300 font-mono font-bold">2/3</span> of the previous height:
-            </p>
-            <div className="bg-black/30 rounded-lg p-4 font-mono text-sm md:text-base overflow-x-auto">
-              <p>Total Distance = H + 2·H·(2/3) + 2·H·(2/3)² + 2·H·(2/3)³ + ...</p>
-              <p className="mt-2 text-gray-400">This is a geometric series that converges to:</p>
-              <p className="mt-2 text-green-300">Total Distance = H + 2H·(2/3) / (1 - 2/3) = H + 4H = <span className="text-yellow-300 font-bold">5H</span></p>
-              <p className="mt-2 text-gray-400">(theoretically, with infinite bounces)</p>
-            </div>
-            <p className="text-sm text-gray-400">
-              However, we stop when the bounce height falls below 0.2 mm (1/5 mm),
-              so the actual total will be slightly less than 5H.
-            </p>
+        {/* Math */}
+        <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '1rem', padding: '1.5rem', marginTop: '2rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem' }}>📐 The Math</h2>
+          <p style={{ color: '#d1d5db', marginBottom: '1rem' }}>
+            With bounce factor <b style={{ color: '#fde047' }}>r = 2/3</b> and initial height <b style={{ color: '#fde047' }}>H</b>:
+          </p>
+          <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '0.5rem', padding: '1rem', fontFamily: 'monospace', fontSize: '0.875rem', lineHeight: 1.8 }}>
+            <div>Total = H + 2·H·r + 2·H·r² + 2·H·r³ + ...</div>
+            <div style={{ color: '#9ca3af', marginTop: '0.5rem' }}>Geometric series → converges to:</div>
+            <div style={{ color: '#86efac', marginTop: '0.5rem' }}>Total = H + 2Hr/(1-r) = H + 2H(2/3)/(1/3) = H + 4H = <b style={{ color: '#fde047' }}>5H</b></div>
+            <div style={{ color: '#9ca3af', marginTop: '0.5rem' }}>(theoretical limit with infinite bounces)</div>
           </div>
+          <p style={{ color: '#9ca3af', fontSize: '0.875rem', marginTop: '1rem' }}>
+            We stop at 0.2 mm threshold, so actual total is slightly less than 5H.
+          </p>
         </div>
       </main>
-    </div>
-  );
-}
-
-function BounceVisualization({ steps }: { steps: BounceStep[] }) {
-  const maxSteps = Math.min(steps.length, 30);
-  const displaySteps = steps.slice(0, maxSteps);
-  const maxHeight = steps[0]?.peakHeight || 1;
-
-  return (
-    <div className="relative">
-      {/* Ground line */}
-      <div className="flex items-end gap-1 h-64 border-b-2 border-green-400/50 px-2 pb-1 overflow-x-auto">
-        {displaySteps.map((step, idx) => {
-          const heightPercent = (step.peakHeight / maxHeight) * 100;
-          const opacity = 1 - (idx / maxSteps) * 0.7;
-          return (
-            <div key={idx} className="flex flex-col items-center flex-1 min-w-[20px] max-w-[40px]">
-              <div
-                className="w-full rounded-t-sm transition-all duration-300"
-                style={{
-                  height: `${Math.max(heightPercent, 2)}%`,
-                  backgroundColor: idx === 0
-                    ? `rgba(239, 68, 68, ${opacity})`
-                    : `rgba(250, 204, 21, ${opacity})`,
-                }}
-                title={`Bounce #${step.bounceNumber}: ${formatDistance(step.peakHeight)}`}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex justify-between mt-2 text-xs text-gray-400">
-        <span>Drop</span>
-        <span>→ Bounce progression →</span>
-        <span>Stop</span>
-      </div>
-      {steps.length > 30 && (
-        <p className="text-center text-gray-400 text-sm mt-2">
-          Showing first 30 bounces (of {steps.length} total)
-        </p>
-      )}
-    </div>
-  );
-}
-
-function PythonCode({ heightMeters }: { heightMeters: number }) {
-  const pythonCode = `def calculate_bounce_distance(initial_height_meters):
-    """
-    Calculate the total distance a ball travels when dropped from a height,
-    bouncing and losing 1/3 of its height each time,
-    until the bounce height is less than 1/5 mm (0.0002 m).
-    
-    Args:
-        initial_height_meters: The initial drop height in meters
-    
-    Returns:
-        tuple: (total_distance, number_of_bounces, list_of_steps)
-    """
-    MIN_HEIGHT = 0.0002  # 1/5 mm in meters (stopping threshold)
-    BOUNCE_FACTOR = 2 / 3  # Ball retains 2/3 of height each bounce
-    
-    total_distance = 0
-    current_height = initial_height_meters
-    bounce_count = 0
-    steps = []
-    
-    # First fall (initial drop)
-    total_distance += current_height
-    steps.append({
-        'bounce': 0,
-        'fall': current_height,
-        'rise': 0,
-        'peak_height': current_height,
-        'cumulative': total_distance
-    })
-    
-    print(f"Initial drop: height = {current_height:.6f} m, "
-          f"distance = {total_distance:.6f} m")
-    
-    # Subsequent bounces
-    while True:
-        next_height = current_height * BOUNCE_FACTOR
-        
-        if next_height < MIN_HEIGHT:
-            print(f"\\nBounce #{bounce_count + 1}: height = {next_height:.6f} m "
-                  f"< {MIN_HEIGHT} m → STOPPING")
-            break
-        
-        bounce_count += 1
-        rise_and_fall = next_height * 2
-        total_distance += rise_and_fall
-        
-        steps.append({
-            'bounce': bounce_count,
-            'fall': next_height,
-            'rise': next_height,
-            'peak_height': next_height,
-            'cumulative': total_distance
-        })
-        
-        print(f"Bounce #{bounce_count}: peak = {next_height:.6f} m, "
-              f"rise+fall = {rise_and_fall:.6f} m, "
-              f"total = {total_distance:.6f} m")
-        
-        current_height = next_height
-    
-    print(f"\\n{'='*50}")
-    print(f"Total bounces: {bounce_count}")
-    print(f"Total distance traveled: {total_distance:.6f} meters")
-    print(f"{'='*50}")
-    
-    return total_distance, bounce_count, steps
-
-
-# Example usage
-if __name__ == "__main__":
-    height = ${heightMeters}  # meters
-    total_dist, bounces, steps = calculate_bounce_distance(height)
-    
-    print(f"\\nBall dropped from {height} meters")
-    print(f"Traveled {total_dist:.6f} meters in {bounces} bounces")
-    print(f"\\nNote: Theoretical limit (infinite bounces) = {5 * height:.6f} meters")`;
-
-  return (
-    <div className="relative">
-      <div className="absolute top-3 right-3 flex gap-2">
-        <button
-          onClick={() => navigator.clipboard.writeText(pythonCode)}
-          className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 border border-green-400/40 rounded-lg text-green-300 text-xs font-medium transition-colors"
-        >
-          📋 Copy Code
-        </button>
-      </div>
-      <pre className="bg-black/40 rounded-lg p-4 overflow-x-auto text-sm font-mono text-gray-200 leading-relaxed">
-        <code>{pythonCode}</code>
-      </pre>
     </div>
   );
 }
